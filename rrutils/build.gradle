@@ -1,0 +1,118 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.bmuschko:gradle-docker-plugin:3.2.3'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'maven-publish'
+    id 'com.google.protobuf' version '0.8.5'
+}
+
+apply from: file("${rootProject.projectDir}/gradle/java.gradle")
+apply plugin: com.bmuschko.gradle.docker.DockerRemoteApiPlugin
+
+// Properties
+mainClassName = "io.netifi.proteus.broker.Bootstrap"
+applicationDefaultJvmArgs = [
+        '-XshowSettings:vm',
+        '-XX:+UseG1GC',
+        '-XX:MaxGCPauseMillis=200',
+        '-XX:+AlwaysPreTouch',
+        '-XX:+UseStringDeduplication',
+        '-XX:+ExplicitGCInvokesConcurrent',
+        '-XX:+ParallelRefProcEnabled',
+        '-XX:InitialRAMPercentage=25',
+        '-XX:MinRAMPercentage=25',
+        '-XX:MaxRAMPercentage=25',
+        '-XX:MaxDirectMemorySize=1024M',
+        '-Xlog:gc:gc.log::filecount=10,filesize=100M',
+        '-DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector'
+]
+
+jar {
+    manifest {
+        attributes(
+            'Main-Class':             "$mainClassName",
+            'Implementation-Title':   "${project.name}",
+            'Implementation-Version': "${project.version}",
+            'Implementation-Vendor':  "Netifi Inc."
+        )
+    }
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+dependencies {
+    compile 'org.roaringbitmap:RoaringBitmap:0.7.17'
+    compile 'io.projectreactor:reactor-core:3.1.8.RELEASE'
+    compile 'org.agrona:agrona:0.9.24'
+
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.mockito:mockito-all:1.10.19'
+}
+
+distZip {
+    archiveName="broker-server.zip"
+}
+
+// IDL Generation
+protobuf {
+    generatedFilesBaseDir = "${projectDir}/src/generated"
+
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.6.0'
+    }
+
+    plugins {
+        rsocketRpc {
+            artifact = "io.rsocket.rpc:protobuf-rpc:$rsocketRpcVersion"
+        }
+        generateProtoTasks {
+            ofSourceSet('main')*.plugins {
+                rsocketRpc {}
+            }
+        }
+    }
+}
+
+idea {
+    module {
+        sourceDirs += file("src/main/proto")
+        sourceDirs += file("src/generated/main/java")
+        sourceDirs += file("src/generated/main/proteus")
+
+        generatedSourceDirs += file('src/generated/main/java')
+        generatedSourceDirs += file('src/generated/main/proteus')
+    }
+}
+
+clean {
+    delete protobuf.generatedFilesBaseDir
+}
+
+// Artifact Publishing
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact distZip
+            artifact sourcesJar
+            artifact javadocJar
+        }
+    }
+    repositories {
+        maven {
+            url = version.endsWith('SNAPSHOT') ? 'https://artifactory.netifiinc.com/artifactory/libs-snapshot-local' : 'https://artifactory.netifiinc.com/artifactory/libs-release-local'
+            credentials {
+                username = project.hasProperty('netifiArtifactoryUsername') ? project.property('netifiArtifactoryUsername') : System.getenv('NETIFI_ARTIFACTORY_USERNAME')
+                password = project.hasProperty('netifiArtifactoryPassword') ? project.property('netifiArtifactoryPassword') : System.getenv('NETIFI_ARTIFACTORY_PASSWORD')
+            }
+        }
+    }
+}

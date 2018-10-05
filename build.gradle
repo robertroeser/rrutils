@@ -1,0 +1,42 @@
+plugins {
+    id 'com.gradle.build-scan' version '1.15.1'
+    id 'com.github.sherter.google-java-format' version '0.7.1'
+    id 'me.champeau.gradle.jmh' version '0.4.4'
+    id 'net.saliman.properties' version '1.4.6'
+}
+
+buildScan {
+    licenseAgreementUrl = 'https://gradle.com/terms-of-service'
+    licenseAgree = 'yes'
+    publishOnFailure()
+}
+
+allprojects {
+    apply plugin: 'idea'
+    apply plugin: 'net.saliman.properties'
+
+    googleJavaFormat {
+        exclude '**/generated'
+    }
+
+    // Proteus Versions
+    ext {
+        proteusVersion = '0.8.10'
+        rsocketRpcVersion = '0.1.2'
+    }
+
+    repositories {
+        mavenLocal()
+        jcenter()
+        maven {
+            url 'https://artifactory.netifiinc.com/artifactory/libs-release'
+            credentials {
+                username = project.hasProperty('netifiArtifactoryUsername') ? project.property('netifiArtifactoryUsername') : System.getenv('NETIFI_ARTIFACTORY_USERNAME')
+                password = project.hasProperty('netifiArtifactoryPassword') ? project.property('netifiArtifactoryPassword') : System.getenv('NETIFI_ARTIFACTORY_PASSWORD')
+            }
+        }
+        maven {
+            url 'https://dl.bintray.com/netifi/netifi-oss'
+        }
+    }
+}
